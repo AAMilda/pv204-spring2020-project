@@ -15,6 +15,10 @@ import javacard.security.MessageDigest;
 import javacardx.crypto.Cipher;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
+import java.math.BigInteger;
+
+
+
  
 
 public class SimpleAPDU 
@@ -42,6 +46,41 @@ public class SimpleAPDU
     
     private static final byte APPLET_AID[] = {(byte) 0x00, (byte) 0xA4, (byte) 0x04, (byte) 0x00, (byte) 0x06, (byte) 0xC9, (byte) 0xAA, (byte) 0x4E, (byte) 0x15, (byte) 0xB3, (byte) 0xF6, (byte) 0x7F};
 
+    
+    // helper functions for SPEKE calculations [IEE163] [https://github.com/chetan51/ABBC/blob/master/src/main/java/RSAEngine/Crypter.java]
+    public static BigInteger OS2IP(byte[]X){
+		BigInteger out = new BigInteger("0");
+		BigInteger twofiftysix = new BigInteger("256");
+		
+		for(int i = 1; i <= X.length; i++){
+			out = out.add((BigInteger.valueOf(0xFF & X[i - 1])).multiply(twofiftysix.pow(X.length-i)));
+		}
+		//x = x(xLen–1)^256xLen–1 + x(xLen–2)^256xLen–2 + … + x(1)^256 + x0
+		
+		return out;
+	}
+
+    
+    public static byte[] I2OSP(BigInteger X, int XLen){
+		BigInteger twofiftysix = new BigInteger("256");
+		byte[] out = new byte[XLen];
+		BigInteger[] cur;
+		
+		if(X.compareTo(twofiftysix.pow(XLen)) >= 0){
+			return new String("integer too large").getBytes();
+		}
+		for(int i = 1; i <= XLen; i++){
+			cur = X.divideAndRemainder(twofiftysix.pow(XLen-i));
+			//X = cur[1];
+			out[i - 1] = cur[0].byteValue();
+		}
+		//basically the inverse of the above
+		//Cur is an array of two bigints, with cur[0]=X/256^(XLen-i) and cur[1]=X/256^[XLen-i]
+		
+		return out;
+	}
+    
+    
     public static void main(String[] args) throws Exception 
     {
         byte[] installData = new byte[10];
@@ -71,7 +110,7 @@ public class SimpleAPDU
             System.exit(0);
         }
         
-        if(pin.length() != 4)
+        if(pin.length() != 4 || !pin.matches("[0-9]+"))
         {
             System.out.println("Invalid PIN");
             System.exit(0);
@@ -155,11 +194,12 @@ public class SimpleAPDU
         System.out.println();
         
         //if(Arrays.equals(baTempSS, baTempSS1) == true)
-        //start();        
-        //G = Hash(PIN) mod P
-        //U = (G ^ A) mod P
-        //V = (G ^ B) mod P
-        //Hash(PIN) = hashBuffer
+        //start();
+        //
+        //BigInteger G_number = OS2IP(hashBuffer).mod(p);
+        //U = G.pow(A).mod(P)
+        //V = G.pow(B).mod(P)
+        //
         
         aes();
     }
